@@ -305,7 +305,7 @@
 <body>
 <div id="frame">
 
-  <!-- ===================== ROLE / PIN GATE ===================== -->
+  <!-- ===================== ROLE GATE ===================== -->
   <div id="gate">
     <div class="gate-mark">🔒</div>
     <h1>Connection Constructor</h1>
@@ -315,22 +315,13 @@
       <div class="role-select">
         <button class="role-card him" onclick="onPickRole('him')">
           <span class="role-emoji">🧱</span>
-          <span class="role-name">Я</span>
+          <span class="role-name">Азизчон</span>
         </button>
         <button class="role-card her" onclick="onPickRole('her')">
           <span class="role-emoji">🧱</span>
-          <span class="role-name">ОНА</span>
+          <span class="role-name">Зарринахон</span>
         </button>
       </div>
-    </div>
-
-    <div id="gate-pin-step" style="display:none;">
-      <div id="pinpad-wrap">
-        <div class="pin-dots" id="pin-dots"></div>
-        <div class="pin-keys" id="pin-keys"></div>
-        <div class="pin-error" id="pin-error"></div>
-      </div>
-      <button class="back-link" onclick="onBackToRole()">← выбрать другую роль</button>
     </div>
 
     <div class="gate-footnote">Если это первый запуск — сначала настрой Firebase по инструкции в чате, иначе вход не сработает.</div>
@@ -437,22 +428,14 @@ const firebaseConfig = {
   appId: "1:1069666930473:web:919006f5608171aa6eb138"
 };
 
-// Email-адреса двух аккаунтов Firebase Authentication, которые ты создашь
-// вручную в консоли (Authentication → Users). Можно оставить как есть —
-// главное, чтобы совпадало с тем, что ты создал в консоли.
-const EMAIL_HIM = "him@connection-constructor.local";
-const EMAIL_HER = "her@connection-constructor.local";
-
-// Пароль в Firebase = этот префикс + 4-значный PIN, который человек вводит
-// на экране входа. Так PIN остаётся коротким (удобно), а пароль в Firebase
-// при этом достаточно длинный (Firebase требует минимум 6 символов).
-const PASSWORD_PREFIX = "cc-";
+// Имена, которые видно в интерфейсе вместо "Я / Она".
+const ROLE_NAMES = { him: "Азизчон", her: "Зарринахон" };
 
 /* ============================================================================ */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
 import {
-  getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut
+  getAuth, signInAnonymously, onAuthStateChanged, signOut
 } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
 import {
   getDatabase, ref, push, set, update, remove, onValue
@@ -471,7 +454,7 @@ if (configOk) {
 // Категории для свободного текста: ключевые основы слов → каноническое значение.
 // Простая логика по ключевым словам (без ИИ), как и просили.
 const CATEGORY_RULES = [
-  { key:'language', title:'Язык', q:(p)=>`Какой язык ${p} учит?`,
+  { key:'language', title:'Язык', q:(p)=>`Какой язык учит ${p}?`,
     pool:['испанский','французский','немецкий','итальянский','английский','китайский','японский','португальский','корейский','арабский'],
     stems:{'испанск':'испанский','французск':'французский','немецк':'немецкий','итальянск':'итальянский','английск':'английский','китайск':'китайский','японск':'японский','португальск':'португальский','корейск':'корейский','арабск':'арабский'} },
   { key:'hobby', title:'Хобби', q:(p)=>`Каким хобби увлекается ${p}?`,
@@ -501,8 +484,8 @@ const TRAVEL_POOL = ['Японию','Италию','Исландию','Нову�
 /* ============================== СОСТОЯНИЕ ============================== */
 const state = { role:null, otherRole:null, myFacts:{}, otherFacts:{}, currentTab:'me' };
 
-function pronounFor(role){ return role==='him' ? 'он' : 'она'; }
-function roleLabel(role){ return role==='him' ? 'ОН' : 'ОНА'; }
+function nameFor(role){ return ROLE_NAMES[role]; }
+function roleLabel(role){ return ROLE_NAMES[role]; }
 
 /* ============================== УТИЛИТЫ ============================== */
 function shuffle(arr){ const a=[...arr]; for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]];} return a; }
@@ -629,7 +612,7 @@ function escapeHtml(s){
 
 /* ============================== РЕНДЕР: КВИЗЫ ============================== */
 function renderQuizzes(){
-  document.getElementById('quiz-title').textContent = `Угадай, какой${state.otherRole==='her'?'ая':''} ${pronounFor(state.otherRole)}`;
+  document.getElementById('quiz-title').textContent = `Квизы про ${nameFor(state.otherRole)}`;
   const list = document.getElementById('quiz-list');
   const entries = Object.entries(state.otherFacts)
     .filter(([id,f]) => f.category !== 'freeform' && !f.answered)
@@ -640,7 +623,7 @@ function renderQuizzes(){
   else { badge.style.display='none'; }
 
   if(!entries.length){
-    list.innerHTML = `<div class="empty-state"><span class="emoji">❓</span>Пока нет новых карточек.<br>Как только ${pronounFor(state.otherRole)} добавит факт о себе — здесь появится квиз.</div>`;
+    list.innerHTML = `<div class="empty-state"><span class="emoji">❓</span>Пока нет новых карточек.<br>Как только ${nameFor(state.otherRole)} добавит факт о себе — здесь появится квиз.</div>`;
     return;
   }
 
@@ -648,18 +631,18 @@ function renderQuizzes(){
 }
 
 function renderQuizCard(id, f){
-  const pronoun = pronounFor(state.otherRole);
+  const name = nameFor(state.otherRole);
   if(f.category === 'memory'){
     return `
       <div class="quiz-card" id="quiz-${id}">
         <span class="quiz-eyebrow">${CATEGORY_LABELS[f.category]}</span>
-        <h3>Какое у ${state.otherRole==='him'?'него':'неё'} самое тёплое воспоминание из детства?</h3>
+        <h3>Какое у ${name} самое тёплое воспоминание из детства?</h3>
         <button class="btn ghost small" onclick="revealMemory('${id}')">Показать ответ</button>
         <div id="reveal-${id}"></div>
       </div>`;
   }
   const rule = RULES_BY_KEY[f.category];
-  const question = rule ? rule.q(pronoun) : (f.category==='book' ? `Какая книга больше всего нравится ${pronoun}?` : `Куда больше всего хочет поехать ${pronoun}?`);
+  const question = rule ? rule.q(name) : (f.category==='book' ? `Какая книга больше всего нравится ${name}?` : `Куда больше всего хочет поехать ${name}?`);
   const opts = f.options || [];
   return `
     <div class="quiz-card" id="quiz-${id}">
@@ -706,14 +689,14 @@ window.answerQuiz = (id, chosen, correct, btnEl) => {
 
 /* ============================== РЕНДЕР: ЗАМЕТКИ ============================== */
 function renderNotes(){
-  document.getElementById('notes-title').textContent = `Заметки от ${pronounFor(state.otherRole)==='она' ? 'неё' : 'него'}`;
+  document.getElementById('notes-title').textContent = `Заметки от ${nameFor(state.otherRole)}`;
   const list = document.getElementById('notes-list');
   const entries = Object.entries(state.otherFacts)
     .filter(([id,f]) => f.category === 'freeform')
     .sort((a,b)=>b[1].createdAt-a[1].createdAt);
 
   if(!entries.length){
-    list.innerHTML = `<div class="empty-state"><span class="emoji">✉️</span>Здесь появятся тёплые заметки,<br>когда ${pronounFor(state.otherRole)} напишет о себе своими словами.</div>`;
+    list.innerHTML = `<div class="empty-state"><span class="emoji">✉️</span>Здесь появятся тёплые заметки,<br>когда ${nameFor(state.otherRole)} напишет о себе своими словами.</div>`;
     return;
   }
   list.innerHTML = entries.map(([id,f]) => `
@@ -745,10 +728,7 @@ function attachListeners(){
   });
 }
 
-/* ============================== АУТЕНТИФИКАЦИЯ / PIN ============================== */
-let pendingRole = null;
-let pinDigits = '';
-
+/* ============================== АУТЕНТИФИКАЦИЯ / РОЛЬ ============================== */
 function requireConfig(){
   if(!configOk){
     showToast('Сначала заполни firebaseConfig в коде файла — см. инструкцию в чате');
@@ -757,60 +737,21 @@ function requireConfig(){
   return true;
 }
 
-window.onPickRole = (role) => {
+window.onPickRole = async (role) => {
   if(!requireConfig()) return;
-  pendingRole = role;
-  pinDigits = '';
-  document.getElementById('gate-role-step').style.display = 'none';
-  document.getElementById('gate-pin-step').style.display = 'block';
-  document.getElementById('pin-error').textContent = '';
-  renderPinDots(); renderPinKeys();
-};
-window.onBackToRole = () => {
-  pendingRole = null; pinDigits='';
-  document.getElementById('gate-pin-step').style.display = 'none';
-  document.getElementById('gate-role-step').style.display = 'block';
-};
-
-function renderPinDots(){
-  const wrap = document.getElementById('pin-dots');
-  wrap.innerHTML = [0,1,2,3].map(i => `<span class="pin-dot ${i < pinDigits.length ? 'filled':''}"></span>`).join('');
-}
-function renderPinKeys(){
-  const wrap = document.getElementById('pin-keys');
-  const keys = ['1','2','3','4','5','6','7','8','9','','0','⌫'];
-  wrap.innerHTML = keys.map(k => {
-    if(k === '') return `<span></span>`;
-    if(k === '⌫') return `<button class="pin-key ghost" onclick="pinBackspace()">⌫</button>`;
-    return `<button class="pin-key" onclick="pinPress('${k}')">${k}</button>`;
-  }).join('');
-}
-window.pinPress = (d) => {
-  if(pinDigits.length >= 4) return;
-  pinDigits += d;
-  renderPinDots();
-  if(pinDigits.length === 4) attemptSignIn();
-};
-window.pinBackspace = () => {
-  pinDigits = pinDigits.slice(0,-1);
-  renderPinDots();
-};
-
-async function attemptSignIn(){
-  const email = pendingRole === 'him' ? EMAIL_HIM : EMAIL_HER;
-  const password = PASSWORD_PREFIX + pinDigits;
   try{
-    await signInWithEmailAndPassword(auth, email, password);
-    localStorage.setItem('cc_role', pendingRole);
+    await signInAnonymously(auth);
+    localStorage.setItem('cc_role', role);
+    enterApp(role);
   }catch(e){
-    document.getElementById('pin-error').textContent = 'Неверный PIN. Попробуй ещё раз.';
-    pinDigits=''; renderPinDots();
+    showToast('Не удалось войти. Проверь, что в Firebase включён анонимный вход: Authentication → Sign-in method → Anonymous.');
   }
-}
+};
 
 window.onLogout = () => {
   signOut(auth);
   localStorage.removeItem('cc_role');
+  showGate();
 };
 
 function enterApp(role){
@@ -828,15 +769,14 @@ function enterApp(role){
 function showGate(){
   document.getElementById('app-shell').style.display='none';
   document.getElementById('gate').style.display='flex';
-  document.getElementById('gate-role-step').style.display='block';
-  document.getElementById('gate-pin-step').style.display='none';
 }
 
 if(configOk){
   onAuthStateChanged(auth, (user) => {
     if(user){
-      const role = user.email === EMAIL_HIM ? 'him' : (user.email === EMAIL_HER ? 'her' : null);
-      if(role) enterApp(role); else showGate();
+      const savedRole = localStorage.getItem('cc_role');
+      if(savedRole === 'him' || savedRole === 'her') enterApp(savedRole);
+      else showGate();
     } else {
       showGate();
     }
